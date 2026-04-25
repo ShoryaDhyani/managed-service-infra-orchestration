@@ -87,7 +87,6 @@ async def reverse_proxy(request: Request, path: str):
         headers=response_headers
     )
 
-
 if __name__ == '__main__':
     print(f'Reverse Proxy Running..8000')
     uvicorn.run(app, host='0.0.0.0', port=8000)
