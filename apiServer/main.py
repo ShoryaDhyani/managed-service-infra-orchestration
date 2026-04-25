@@ -1,48 +1,23 @@
 import asyncio
-import json
 from fastapi.staticfiles import StaticFiles
+from httpcore import request
 import uvicorn
 import redis.asyncio as aioredis
 import boto3
 from coolname import generate_slug
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from fastapi.templating import Jinja2Templates
-from typing import Optional
+from fastapi.responses import FileResponse
 from fastapi import Request
 from contextlib import asynccontextmanager
 from config import config
 from config import ProjectRequest
-import httpx
-from sqlalchemy.orm import Session
-
-from db.deps import get_db
-from db.base import Base
-from services.github_service import GitHubService
-from services.auth_service import AuthService
-from db.session import engine
-from models import User
-
-def init_db():
-    Base.metadata.create_all(bind=engine)
-
-
-def get_current_user(db: Session = Depends(get_db)):
-    # TEMP: replace with JWT later
-    user = db.query(User).first()
-
-    if not user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    return user
 
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(init_redis_subscribe())
-    init_db()
     
     yield
     
@@ -52,7 +27,6 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
 app = FastAPI(lifespan=lifespan)
-templates = Jinja2Templates(directory="templates")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -123,15 +97,16 @@ async def websocket_endpoint(websocket: WebSocket, channel: str):
 
 
 # ── Request Model ─────────────────────────────────────────────────
-app.mount('/static', StaticFiles(directory='static'), name='static')
+app.mount('/assets', StaticFiles(directory='static/assets'), name='assets')
 @app.get('/')
 async def root(request: Request):
-    return templates.TemplateResponse('index.html', {'request': request})
+    return FileResponse('static/index.html')
 
 # ── Routes ────────────────────────────────────────────────────────
 @app.post('/project')
-async def create_project(body: ProjectRequest):
+async def create_project(body: ProjectRequest, request: Request):
     project_slug = body.slug if body.slug else generate_slug(2)
+
 
     ecs_client.run_task(
         cluster=container_config['CLUSTER'],
@@ -151,47 +126,26 @@ async def create_project(body: ProjectRequest):
                     'name': 'builder-image',
                     'environment': [
                         {'name': 'GIT_URL', 'value': body.gitURL},
-                        {'name': 'PROJECT_ID',          'value': project_slug}
+                        {'name': 'PROJECT_ID', 'value': project_slug}
                     ]
                 }
             ]
         }
     )
 
+    # Get protocol + host from request
+    host = request.headers.get("host")
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+
     return {
         'status': 'queued',
         'data': {
             'projectSlug': project_slug,
-            'url': f'http://{project_slug}.localhost:8000'
+            'url': f'{proto}://{project_slug}.{host}'
         }
     }
 
 
-@app.get('/auth/github/login')
-async def github_login():
-    url = GitHubService.get_authorization_url()
-    return {"auth_url": url}
-
-
-@app.get("/auth/github/callback")
-async def github_callback(code: str, db: Session = Depends(get_db)):
-    try:
-        token = await GitHubService.exchange_code_for_token(code)
-        github_user = await GitHubService.get_user(token)
-
-        user = AuthService.upsert_github_user(db, github_user, token)
-
-        # return JWT or session
-        return {
-            "access_token": token,
-            "user": {
-                "id": user.id,
-                "username": user.username
-            }
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 # ── Redis Subscriber ──────────────────────────────────────────────
 async def init_redis_subscribe():
