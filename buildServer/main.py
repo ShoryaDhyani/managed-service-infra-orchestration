@@ -5,20 +5,19 @@ import mimetypes
 import threading
 from pathlib import Path 
 import boto3
-
 from redis import Redis
 from dotenv import load_dotenv
 load_dotenv()
 # Redis setup
-publisher = removed
+publisher = Redis.from_url(os.getenv('REDIS_URL'))
 
 
 # S3 setup
 s3_client = boto3.client(
     's3',
     region_name='ap-south-1',
-    aws_access_key_id='removed',
-    aws_secret_access_key='removed'
+    aws_access_key_id=os.getenv('AWS_ACCESS_KEY'),
+    aws_secret_access_key=os.getenv('AWS_SECRET_KEY')
 )
 
 PROJECT_ID = os.environ.get('PROJECT_ID')
