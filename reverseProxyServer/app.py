@@ -5,7 +5,6 @@ import uvicorn
 
 app = FastAPI()
 
-PORT = 8000
 BASE_PATH = 'https://msio-outputs.s3.ap-south-1.amazonaws.com/__outputs'
 
 NOT_FOUND_HTML = """
@@ -90,5 +89,5 @@ async def reverse_proxy(request: Request, path: str):
 
 
 if __name__ == '__main__':
-    print(f'Reverse Proxy Running..{PORT}')
-    uvicorn.run(app, host='0.0.0.0', port=PORT)
+    print(f'Reverse Proxy Running..8000')
+    uvicorn.run(app, host='0.0.0.0', port=8000)
