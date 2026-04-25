@@ -160,10 +160,6 @@ async def init_redis_subscribe():
 
 
 # ── Startup ───────────────────────────────────────────────────────
-
-
-
-
 if __name__ == '__main__':
     print(f'API Server Running..{PORT}')
     uvicorn.run(
