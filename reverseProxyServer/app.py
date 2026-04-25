@@ -51,9 +51,41 @@ def get_target_url(request: Request, path: str) -> str:
     resolved = f'{BASE_PATH}/{subdomain}'
     return f'{resolved}/{path}' if path else f'{resolved}/index.html'
 
-@app.get('/')
-async def root(request: Request):
-    return {'status': "ok"}
+@app.api_route('/{path:path}', methods=['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
+async def reverse_proxy(request: Request, path: str):
+    target_url = "http://localhost:9000" + request.url.path
+    
+    headers = dict(request.headers)
+    headers.pop('host', None)
+
+    body = await request.body()
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            content=body,
+            params=dict(request.query_params),
+            follow_redirects=False
+        )
+
+    # Show 404 page for missing files or S3 access denied responses
+    if resp.status_code in (403, 404):
+        return HTMLResponse(content=NOT_FOUND_HTML, status_code=404)
+
+    excluded_headers = {'content-encoding', 'transfer-encoding', 'connection'}
+    response_headers = {
+        key: val for key, val in resp.headers.items()
+        if key.lower() not in excluded_headers
+    }
+
+    return StreamingResponse(
+        content=iter([resp.content]),
+        status_code=resp.status_code,
+        headers=response_headers
+    )
+
 
 @app.api_route('/{path:path}', methods=['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
 async def reverse_proxy(request: Request, path: str):
