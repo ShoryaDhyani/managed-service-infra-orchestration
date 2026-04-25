@@ -5,7 +5,7 @@ on:
     branches: ["master"]
     paths:
       - "frontend/**"
-      - "apiserver/**"
+      - "apiServer/**"
 
 env:
   AWS_REGION: ap-south-1
