@@ -68,11 +68,14 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           cd reverseProxyServer
-          docker build -t $ECR_REGISTRY/$ECR_REPO_PROXY:$IMAGE_TAG .
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPO_PROXY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPO_PROXY:latest \
+            .
           docker push $ECR_REGISTRY/$ECR_REPO_PROXY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPO_PROXY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPO_PROXY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-      # ── Build & push webapp image ──────────────────────────────
+        
       - name: Build and push webapp image
         id: build-webapp
         env:
@@ -80,8 +83,12 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           cd apiServer
-          docker build -t $ECR_REGISTRY/$ECR_REPO_WEBAPP:$IMAGE_TAG .
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPO_WEBAPP:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPO_WEBAPP:latest \
+            .
           docker push $ECR_REGISTRY/$ECR_REPO_WEBAPP:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPO_WEBAPP:latest
           echo "image=$ECR_REGISTRY/$ECR_REPO_WEBAPP:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       # ── Inject new proxy image into task definition ────────────
