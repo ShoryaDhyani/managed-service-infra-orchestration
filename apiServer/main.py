@@ -13,6 +13,8 @@ from contextlib import asynccontextmanager
 from config import config
 from config import ProjectRequest
 
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(init_redis_subscribe())

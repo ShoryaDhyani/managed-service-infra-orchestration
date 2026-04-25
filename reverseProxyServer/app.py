@@ -42,6 +42,9 @@ NOT_FOUND_HTML = """
 """
 
 
+
+
+
 def get_target_url(request: Request, path: str) -> str:
     hostname = request.headers.get('host', '').split(':')[0]
     subdomain = hostname.split('.')[0]
