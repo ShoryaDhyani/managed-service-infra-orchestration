@@ -41,79 +41,64 @@ NOT_FOUND_HTML = """
 </html>
 """
 
-
-
+# Root domain names that should go to webapp (localhost:9000)
+ROOT_DOMAINS = {'msio', 'www', ''}
 
 
 def get_target_url(request: Request, path: str) -> str:
     hostname = request.headers.get('host', '').split(':')[0]
+    # e.g. aaa.msio.shoryadhyani.me  →  subdomain = 'aaa'
+    #      msio.shoryadhyani.me       →  subdomain = 'msio'
     subdomain = hostname.split('.')[0]
-    resolved = f'{BASE_PATH}/{subdomain}'
-    return f'{resolved}/{path}' if path else f'{resolved}/index.html'
 
-@app.api_route('/{path:path}', methods=['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
-async def reverse_proxy(request: Request, path: str):
-    target_url = "http://localhost:9000" + request.url.path
-    
-    headers = dict(request.headers)
-    headers.pop('host', None)
-
-    body = await request.body()
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.request(
-            method=request.method,
-            url=target_url,
-            headers=headers,
-            content=body,
-            params=dict(request.query_params),
-            follow_redirects=False
-        )
-
-    # Show 404 page for missing files or S3 access denied responses
-    if resp.status_code in (403, 404):
-        return HTMLResponse(content=NOT_FOUND_HTML, status_code=404)
-
-    excluded_headers = {'content-encoding', 'transfer-encoding', 'connection'}
-    response_headers = {
-        key: val for key, val in resp.headers.items()
-        if key.lower() not in excluded_headers
-    }
-
-    return StreamingResponse(
-        content=iter([resp.content]),
-        status_code=resp.status_code,
-        headers=response_headers
-    )
+    if subdomain in ROOT_DOMAINS:
+        # Root domain → forward to webapp container
+        target = f'http://localhost:9000'
+        return f'{target}/{path}' if path else target
+    else:
+        # Wildcard subdomain → proxy to S3
+        return f'{BASE_PATH}/{subdomain}/{path}' if path else f'{BASE_PATH}/{subdomain}/index.html'
 
 
-@app.api_route('/{path:path}', methods=['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'])
+@app.api_route(
+    '/{path:path}',
+    methods=['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
+)
 async def reverse_proxy(request: Request, path: str):
     target_url = get_target_url(request, path)
-    
+
+    # Debug log — remove after confirming it works
+    print(f'[proxy] host={request.headers.get("host")} → {target_url}')
+
     headers = dict(request.headers)
     headers.pop('host', None)
 
     body = await request.body()
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.request(
-            method=request.method,
-            url=target_url,
-            headers=headers,
-            content=body,
-            params=dict(request.query_params),
-            follow_redirects=False
-        )
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            resp = await client.request(
+                method=request.method,
+                url=target_url,
+                headers=headers,
+                content=body,
+                params=dict(request.query_params),
+                follow_redirects=False
+            )
+        except httpx.RequestError as e:
+            print(f'[proxy] error: {e}')
+            return HTMLResponse(
+                content=f'<h1>502 Bad Gateway</h1><p>{str(e)}</p>',
+                status_code=502
+            )
 
-    # Show 404 page for missing files or S3 access denied responses
     if resp.status_code in (403, 404):
         return HTMLResponse(content=NOT_FOUND_HTML, status_code=404)
 
     excluded_headers = {'content-encoding', 'transfer-encoding', 'connection'}
     response_headers = {
-        key: val for key, val in resp.headers.items()
-        if key.lower() not in excluded_headers
+        k: v for k, v in resp.headers.items()
+        if k.lower() not in excluded_headers
     }
 
     return StreamingResponse(
@@ -122,6 +107,7 @@ async def reverse_proxy(request: Request, path: str):
         headers=response_headers
     )
 
+
 if __name__ == '__main__':
-    print(f'Reverse Proxy Running..8000')
+    print('Reverse Proxy running on port 8000...')
     uvicorn.run(app, host='0.0.0.0', port=8000)
