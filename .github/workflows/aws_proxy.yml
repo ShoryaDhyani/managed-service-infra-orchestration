@@ -12,7 +12,7 @@ env:
   AWS_REGION: ap-south-1
   ECS_SERVICE: msio-td-service-pi8c33zb
   ECS_CLUSTER: msio-deploy
-  ECS_TASK_DEFINITION: .aws/task-definition.json
+  ECS_TASK_FAMILY: msio-td
   ECR_REPO_PROXY: rev-proxy
   ECR_REPO_WEBAPP: webapp-msio
   CONTAINER_NAME_PROXY: revproxy
@@ -60,7 +60,7 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ── Build & push reverse proxy image ──────────────────────
+      # ── Build & push both images in parallel ───────────────────
       - name: Build and push proxy image
         id: build-proxy
         env:
@@ -75,7 +75,7 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPO_PROXY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPO_PROXY:latest
           echo "image=$ECR_REGISTRY/$ECR_REPO_PROXY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-        
+
       - name: Build and push webapp image
         id: build-webapp
         env:
@@ -91,26 +91,33 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPO_WEBAPP:latest
           echo "image=$ECR_REGISTRY/$ECR_REPO_WEBAPP:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-      # ── Inject new proxy image into task definition ────────────
+      # ── Fetch live task definition from AWS ────────────────────
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_TASK_FAMILY }} \
+            --region ${{ env.AWS_REGION }} \
+            --query taskDefinition \
+            > /tmp/task-definition.json
+
+      # ── Inject new images ──────────────────────────────────────
       - name: Render proxy into task definition
         id: task-def-proxy
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: ${{ env.ECS_TASK_DEFINITION }}
+          task-definition: /tmp/task-definition.json
           container-name: ${{ env.CONTAINER_NAME_PROXY }}
           image: ${{ steps.build-proxy.outputs.image }}
 
-      # ── Inject new webapp image into updated task definition ───
       - name: Render webapp into task definition
         id: task-def-webapp
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          # ⚠️ Use the OUTPUT of the previous step, not the original file
           task-definition: ${{ steps.task-def-proxy.outputs.task-definition }}
           container-name: ${{ env.CONTAINER_NAME_WEBAPP }}
           image: ${{ steps.build-webapp.outputs.image }}
 
-      # ── Deploy final task definition with both images ──────────
+      # ── Deploy ─────────────────────────────────────────────────
       - name: Deploy to ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:
