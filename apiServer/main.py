@@ -141,7 +141,7 @@ async def create_project(body: ProjectRequest, request: Request):
         'status': 'queued',
         'data': {
             'projectSlug': project_slug,
-            'url': f'{proto}://{project_slug}.{host}'
+            'url': f'{proto}://{project_slug}.localhost:8000'
         }
     }
 

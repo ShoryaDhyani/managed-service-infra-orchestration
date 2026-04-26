@@ -2,6 +2,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 import httpx
 import uvicorn
+import logging
+import os
+import time
+from logging.handlers import RotatingFileHandler
 
 app = FastAPI()
 
@@ -42,16 +46,40 @@ NOT_FOUND_HTML = """
 """
 
 # Root domain names that should go to webapp (localhost:9000)
-ROOT_DOMAINS = {'msio', 'www', ''}
+ROOT_DOMAINS = {'msio', 'www', '','localhost'}
+
+# Logging configuration
+LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
+LOG_FILE = os.getenv('LOG_FILE', 'reverse_proxy.log')
+LOG_MAX_BYTES = int(os.getenv('LOG_MAX_BYTES', '10485760'))  # 10MB
+LOG_BACKUP_COUNT = int(os.getenv('LOG_BACKUP_COUNT', '5'))
+
+_formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s: %(message)s')
+_root_logger = logging.getLogger()
+if not _root_logger.handlers:
+    _level = getattr(logging, LOG_LEVEL, logging.INFO)
+    _root_logger.setLevel(_level)
+    _ch = logging.StreamHandler()
+    _ch.setFormatter(_formatter)
+    _root_logger.addHandler(_ch)
+    try:
+        _fh = RotatingFileHandler(LOG_FILE, maxBytes=LOG_MAX_BYTES, backupCount=LOG_BACKUP_COUNT)
+        _fh.setFormatter(_formatter)
+        _root_logger.addHandler(_fh)
+    except Exception as _e:
+        _root_logger.warning('Failed to set up file logging: %s', _e)
+
+logger = logging.getLogger('reverseProxy')
 
 
 def get_target_url(request: Request, path: str) -> str:
     hostname = request.headers.get('host', '').split(':')[0]
-    # e.g. aaa.msio.shoryadhyani.me  →  subdomain = 'aaa'
-    #      msio.shoryadhyani.me       →  subdomain = 'msio'
+    # print(f"Hostname: {hostname}, Path: {path}")
+    # # e.g. aaa.msio.shoryadhyani.me  →  subdomain = 'aaa'
+    # #      msio.shoryadhyani.me       →  subdomain = 'msio'
     subdomain = hostname.split('.')[0]
 
-    if subdomain in ROOT_DOMAINS:
+    if False:
         # Root domain → forward to webapp container
         target = f'http://localhost:9000'
         return f'{target}/{path}' if path else target
@@ -59,16 +87,16 @@ def get_target_url(request: Request, path: str) -> str:
         # Wildcard subdomain → proxy to S3
         return f'{BASE_PATH}/{subdomain}/{path}' if path else f'{BASE_PATH}/{subdomain}/index.html'
 
-
 @app.api_route(
     '/{path:path}',
     methods=['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
 )
 async def reverse_proxy(request: Request, path: str):
+    start = time.monotonic()
     target_url = get_target_url(request, path)
 
-    # Debug log — remove after confirming it works
-    print(f'[proxy] host={request.headers.get("host")} → {target_url}')
+    # Structured log
+    logger.info('[proxy] host=%s -> %s', request.headers.get('host'), target_url)
 
     headers = dict(request.headers)
     headers.pop('host', None)
@@ -86,13 +114,14 @@ async def reverse_proxy(request: Request, path: str):
                 follow_redirects=False
             )
         except httpx.RequestError as e:
-            print(f'[proxy] error: {e}')
+            logger.exception('[proxy] error while requesting %s', target_url)
             return HTMLResponse(
                 content=f'<h1>502 Bad Gateway</h1><p>{str(e)}</p>',
                 status_code=502
             )
 
     if resp.status_code in (403, 404):
+        logger.warning('[proxy] upstream returned %s for %s', resp.status_code, target_url)
         return HTMLResponse(content=NOT_FOUND_HTML, status_code=404)
 
     excluded_headers = {'content-encoding', 'transfer-encoding', 'connection'}
@@ -100,6 +129,14 @@ async def reverse_proxy(request: Request, path: str):
         k: v for k, v in resp.headers.items()
         if k.lower() not in excluded_headers
     }
+
+    elapsed = time.monotonic() - start
+    logger.info('[proxy] proxied %s %s -> %s %d in %.3fs',
+                request.method,
+                request.url.path,
+                request.headers.get('host'),
+                resp.status_code,
+                elapsed)
 
     return StreamingResponse(
         content=iter([resp.content]),
@@ -109,5 +146,5 @@ async def reverse_proxy(request: Request, path: str):
 
 
 if __name__ == '__main__':
-    print('Reverse Proxy running on port 8000...')
+    logger.info('Reverse Proxy running on port 8000...')
     uvicorn.run(app, host='0.0.0.0', port=8000)
