@@ -3,21 +3,20 @@ import DeployForm from "./components/DeployForm";
 import ResultCard from "./components/ResultCard";
 import LogsPanel from "./components/LogsPanel";
 import DeploymentsList from "./components/DeploymentsList";
-import AuthButton from "./components/AuthButton";
 
 export default function App() {
   const [result, setResult] = useState(null);
   const [logsChannel, setLogsChannel] = useState(null);
   const [deployments, setDeployments] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem("deployments") || "[]");
+      return JSON.parse(sessionStorage.getItem("deployments") || "[]");
     } catch {
       return [];
     }
   });
 
   useEffect(() => {
-    localStorage.setItem("deployments", JSON.stringify(deployments));
+    sessionStorage.setItem("deployments", JSON.stringify(deployments));
   }, [deployments]);
 
   function handleDeployed(data) {
@@ -34,7 +33,6 @@ export default function App() {
     <div className="container">
       <header>
         <h1>Deploy</h1>
-        <AuthButton />
       </header>
 
       <main>
