@@ -5,3 +5,7 @@
 node_modules/
 dist/
 __pycache__/
+
+# Logs
+logs/
+*.log
