@@ -6,7 +6,7 @@ on:
     paths:
       - "frontend/**"
       - "apiServer/**"
-      - "reverseProxyServer/**"
+      # - "reverseProxyServer/**"
 
 env:
   AWS_REGION: ap-south-1
