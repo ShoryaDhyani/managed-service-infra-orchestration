@@ -150,7 +150,6 @@ async def create_project(body: ProjectRequest, request: Request):
     }
 
 
-
 # ── Redis Subscriber ──────────────────────────────────────────────
 async def init_redis_subscribe():
     print('Subscribed to logs....')

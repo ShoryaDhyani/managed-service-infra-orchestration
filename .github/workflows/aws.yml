@@ -99,6 +99,18 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --query taskDefinition \
             > /tmp/task-definition.json
+      - name: Clean task definition
+        run: |
+          jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy,
+            .enableFaultInjection
+          )' /tmp/task-definition.json > /tmp/task-definition-clean.json
 
       # ── Inject new images ──────────────────────────────────────
       # - name: Render proxy into task definition
