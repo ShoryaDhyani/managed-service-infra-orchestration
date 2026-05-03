@@ -1,0 +1,127 @@
+name: Deploy to Amazon ECS
+
+on:
+  push:
+    branches: ["master"]
+    paths:
+      - "frontend/**"
+      - "apiServer/**"
+      - "reverseProxyServer/**"
+
+env:
+  AWS_REGION: ap-south-1
+  ECS_SERVICE: msio-td-service-pi8c33zb
+  ECS_CLUSTER: msio-deploy
+  ECS_TASK_FAMILY: msio-td
+  ECR_REPO_PROXY: rev-proxy
+  ECR_REPO_WEBAPP: webapp-msio
+  CONTAINER_NAME_PROXY: revproxy
+  CONTAINER_NAME_WEBAPP: webapp
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Copy frontend build into backend
+        run: |
+          mkdir -p apiServer/static
+          cp -r frontend/dist/* apiServer/static/
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── Build & push both images in parallel ───────────────────
+      # - name: Build and push proxy image
+      #   id: build-proxy
+      #   env:
+      #     ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      #     IMAGE_TAG: ${{ github.sha }}
+      #   run: |
+      #     cd reverseProxyServer
+      #     docker build \
+      #       -t $ECR_REGISTRY/$ECR_REPO_PROXY:$IMAGE_TAG \
+      #       -t $ECR_REGISTRY/$ECR_REPO_PROXY:latest \
+      #       .
+      #     docker push $ECR_REGISTRY/$ECR_REPO_PROXY:$IMAGE_TAG
+      #     docker push $ECR_REGISTRY/$ECR_REPO_PROXY:latest
+      #     echo "image=$ECR_REGISTRY/$ECR_REPO_PROXY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Build and push webapp image
+        id: build-webapp
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd apiServer
+          docker build \
+            -t $ECR_REGISTRY/$ECR_REPO_WEBAPP:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPO_WEBAPP:latest \
+            .
+          docker push $ECR_REGISTRY/$ECR_REPO_WEBAPP:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPO_WEBAPP:latest
+          echo "image=$ECR_REGISTRY/$ECR_REPO_WEBAPP:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # ── Fetch live task definition from AWS ────────────────────
+      - name: Download current task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ env.ECS_TASK_FAMILY }} \
+            --region ${{ env.AWS_REGION }} \
+            --query taskDefinition \
+            > /tmp/task-definition.json
+
+      # ── Inject new images ──────────────────────────────────────
+      - name: Render proxy into task definition
+        id: task-def-proxy
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: /tmp/task-definition.json
+          container-name: ${{ env.CONTAINER_NAME_PROXY }}
+          image: ${{ steps.build-proxy.outputs.image }}
+
+      - name: Render webapp into task definition
+        id: task-def-webapp
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def-proxy.outputs.task-definition }}
+          container-name: ${{ env.CONTAINER_NAME_WEBAPP }}
+          image: ${{ steps.build-webapp.outputs.image }}
+
+      # ── Deploy ─────────────────────────────────────────────────
+      - name: Deploy to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def-webapp.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
