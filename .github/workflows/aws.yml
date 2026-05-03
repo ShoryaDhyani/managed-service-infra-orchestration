@@ -125,7 +125,7 @@ jobs:
         id: task-def-webapp
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: /tmp/task-definition.json
+          task-definition: /tmp/task-definition-clean.json
           container-name: ${{ env.CONTAINER_NAME_WEBAPP }}
           image: ${{ steps.build-webapp.outputs.image }}
 
