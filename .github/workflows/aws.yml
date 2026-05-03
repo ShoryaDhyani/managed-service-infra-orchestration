@@ -101,13 +101,13 @@ jobs:
             > /tmp/task-definition.json
 
       # ── Inject new images ──────────────────────────────────────
-      - name: Render proxy into task definition
-        id: task-def-proxy
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: /tmp/task-definition.json
-          container-name: ${{ env.CONTAINER_NAME_PROXY }}
-          image: ${{ steps.build-proxy.outputs.image }}
+      # - name: Render proxy into task definition
+      #   id: task-def-proxy
+      #   uses: aws-actions/amazon-ecs-render-task-definition@v1
+      #   with:
+      #     task-definition: /tmp/task-definition.json
+      #     container-name: ${{ env.CONTAINER_NAME_PROXY }}
+      #     image: ${{ steps.build-proxy.outputs.image }}
 
       - name: Render webapp into task definition
         id: task-def-webapp
