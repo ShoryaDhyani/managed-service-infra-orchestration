@@ -8,4 +8,4 @@ __pycache__/
 
 # Logs
 logs/
-*.log
+*.log.aws/task-definition.json 
