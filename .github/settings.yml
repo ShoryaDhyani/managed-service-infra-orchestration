@@ -1,0 +1,14 @@
+repository:
+  description: "Managed service infra orchestration for building, storing, and serving frontend deployments on AWS."
+  homepage: ""
+  topics:
+    - aws
+    - ecs
+    - s3
+    - fastapi
+    - react
+    - vite
+    - redis
+    - reverse-proxy
+    - ci-cd
+    - managed-service
