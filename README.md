@@ -18,6 +18,11 @@ MSIO provides:
 - `reverseProxyServer/` — FastAPI reverse proxy for wildcard subdomain routing to S3 outputs
 - `.github/workflows/aws.yml` — CI/CD workflow to build and deploy to AWS ECS
 
+## Architecture
+
+![Architecture](./msio-architecture.svg)
+
+
 ## Local Development
 
 ### Frontend
