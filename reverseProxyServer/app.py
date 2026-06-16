@@ -9,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 
 app = FastAPI()
 
-BASE_PATH = 'https://msio-outputs.s3.ap-south-1.amazonaws.com/__outputs'
+BASE_PATH = 'https://msio-outputs-1.s3.ap-south-1.amazonaws.com/__outputs'
 
 NOT_FOUND_HTML = """
 <!DOCTYPE html>
