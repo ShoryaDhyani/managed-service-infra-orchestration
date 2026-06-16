@@ -53,6 +53,46 @@ container_config = {
 }
 
 
+def run_build_container(body: ProjectRequest, project_slug: str, request: Request):
+    try:
+        ecs_client.run_task(
+            cluster=container_config['CLUSTER'],
+            taskDefinition=container_config['TASK'],
+            launchType='FARGATE',
+            count=1,
+            networkConfiguration={
+                'awsvpcConfiguration': {
+                    'assignPublicIp': 'ENABLED',
+                    'subnets': ['subnet-0d9261d1bac8665af', 'subnet-03eb8bca8687f02d8', 'subnet-0afe74c57cdd4e235'],
+                    'securityGroups': ['sg-0d8483897cb94cd43']
+                }
+            },
+            overrides={
+                'containerOverrides': [
+                    {
+                        'name': 'builder-image',
+                        'environment': [
+                            {'name': 'GIT_URL', 'value': body.gitURL},
+                            {'name': 'PROJECT_ID', 'value': project_slug},
+                            {'name': 'PROJECT_TYPE', 'value': body.type}
+                        ]
+                    }
+                ]
+            }
+        )
+
+        # Get protocol + host from request
+        host = request.headers.get("host")
+        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    
+    except Exception as e:
+        print(f'Error running ECS task: {e}')
+        return None, None
+
+    return host, proto
+
+
+
 # ── Connection Manager ────────────────────────────────────────────
 class ConnectionManager:
     def __init__(self):
@@ -111,35 +151,21 @@ async def root(request: Request):
 async def create_project(body: ProjectRequest, request: Request):
     project_slug = body.slug if body.slug else generate_slug(2)
 
-
-    ecs_client.run_task(
-        cluster=container_config['CLUSTER'],
-        taskDefinition=container_config['TASK'],
-        launchType='FARGATE',
-        count=1,
-        networkConfiguration={
-            'awsvpcConfiguration': {
-                'assignPublicIp': 'ENABLED',
-                'subnets': ['subnet-0520791c3baa38982', 'subnet-0c36cc1c2f8b9e66d', 'subnet-03c815f83e773e859'],
-                'securityGroups': ['sg-0a53d64eee423e1ac']
-            }
-        },
-        overrides={
-            'containerOverrides': [
-                {
-                    'name': 'builder-image',
-                    'environment': [
-                        {'name': 'GIT_URL', 'value': body.gitURL},
-                        {'name': 'PROJECT_ID', 'value': project_slug}
-                    ]
-                }
-            ]
+    if body.type not in ['react', 'static']:
+        return {
+            'status': 'error',
+            'message': 'Invalid project type. Must be either "react" or "static".'
         }
-    )
+    
 
-    # Get protocol + host from request
-    host = request.headers.get("host")
-    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host,proto=run_build_container(body, project_slug, request)
+
+
+    if not host or not proto:
+        return {
+            'status': 'error',
+            'message': 'Invalid host or protocol.'
+        }
 
     return {
         'status': 'queued',
