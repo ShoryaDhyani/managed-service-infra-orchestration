@@ -19,6 +19,7 @@ class ProjectRequest(BaseModel):
     gitURL: str
     slug: Optional[str] = None
     name: Optional[str] = None
+    type: Optional[str] = None
 
 
 config = Settings()
