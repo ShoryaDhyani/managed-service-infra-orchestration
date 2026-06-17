@@ -21,6 +21,7 @@ s3_client = boto3.client(
 )
 
 PROJECT_ID = os.environ.get('PROJECT_ID')
+TYPE = os.environ.get('PROJECT_TYPE')
 
 def publish_log(log):
     publisher.publish(f'logs:{PROJECT_ID}', json.dumps({'log': log}))
@@ -40,7 +41,7 @@ def upload_file(file_path, relative_path):
 
     with open(file_path, 'rb') as f:
         s3_client.put_object(
-            Bucket='msio-outputs',
+            Bucket='msio-outputs-1',
             Key=f'__outputs/{PROJECT_ID}/{relative_path.as_posix()}',
             Body=f,
             ContentType=content_type
@@ -58,33 +59,37 @@ def main():
         print(f'Error: output directory not found at {out_dir_path}')
         return
 
+    if TYPE == 'react':
     # Run npm install && npm run build
-    process = subprocess.Popen(
-        f'cd {out_dir_path} && npm install && npm run build',
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
+        process = subprocess.Popen(
+            f'cd {out_dir_path} && npm install && npm run build',
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
 
-    # Stream stdout and stderr concurrently to avoid deadlocks
-    t1 = threading.Thread(target=stream_output, args=(process.stdout,))
-    t2 = threading.Thread(target=stream_output, args=(process.stderr, 'error: '))
-    t1.start()
-    t2.start()
-    t1.join()
-    t2.join()
+        # Stream stdout and stderr concurrently to avoid deadlocks
+        t1 = threading.Thread(target=stream_output, args=(process.stdout,))
+        t2 = threading.Thread(target=stream_output, args=(process.stderr, 'error: '))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
 
-    return_code = process.wait()
+        return_code = process.wait()
 
-    if return_code != 0:
-        publish_log(f'Build failed with exit code {return_code}')
-        print(f'Build failed with exit code {return_code}')
-        return
+        if return_code != 0:
+            publish_log(f'Build failed with exit code {return_code}')
+            print(f'Build failed with exit code {return_code}')
+            return
 
-    print('Build Complete')
-    publish_log('Build Complete')
+        print('Build Complete')
+        publish_log('Build Complete')
 
-    dist_folder_path = out_dir_path / 'dist'
+        dist_folder_path = out_dir_path / 'dist'
+
+    else:
+        dist_folder_path = out_dir_path
 
     if not dist_folder_path.exists():
         publish_log('Error: dist folder not found after build')

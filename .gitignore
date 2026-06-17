@@ -5,7 +5,7 @@
 node_modules/
 dist/
 __pycache__/
-
+revprox-Lambda
 # Logs
 logs/
 *.log
