@@ -29,4 +29,4 @@ npm run dev
 
 ## Architecture Design
 
-> TODO: Add architecture diagram and detailed architecture design here.
+![System Architecture](docs/msio-architecture.svg)
