@@ -1,4 +1,4 @@
-export const API_BASE =""
+export const API_BASE ="";
 
 export async function createProject(body) {
   const res = await fetch(`${API_BASE}/project`, {
@@ -7,7 +7,9 @@ export async function createProject(body) {
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return await res.json();
+  const data = await res.json();
+  if (data.status === "error") throw new Error(`API error: ${data.message}`);
+  return data;
 }
 
 export function wsUrlForChannel(channel) {

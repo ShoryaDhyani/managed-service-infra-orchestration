@@ -1,9 +1,25 @@
 import React, { useEffect, useState, useRef } from "react";
 import { wsUrlForChannel } from "../api";
 
+function classifyLine(line) {
+  const l = line.toLowerCase();
+  if (l.includes("error") || l.includes("fail") || l.includes("fatal")) return "error";
+  if (l.includes("warn")) return "warn";
+  if (
+    l.includes("success") ||
+    l.includes("done") ||
+    l.includes("complete") ||
+    l.includes("built") ||
+    l.includes("live")
+  )
+    return "success";
+  return "info";
+}
+
 export default function LogsPanel({ channel }) {
   const [lines, setLines] = useState([]);
   const wsRef = useRef(null);
+  const bodyRef = useRef(null);
 
   useEffect(() => {
     if (!channel) return;
@@ -15,8 +31,7 @@ export default function LogsPanel({ channel }) {
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data);
-        const log = data.log || e.data;
-        setLines((prev) => [...prev, String(log)]);
+        setLines((prev) => [...prev, String(data.log ?? e.data)]);
       } catch {
         setLines((prev) => [...prev, e.data]);
       }
@@ -25,30 +40,41 @@ export default function LogsPanel({ channel }) {
     ws.onclose = () => setLines((prev) => [...prev, "Connection closed"]);
 
     return () => {
-      try {
-        ws.close();
-      } catch {}
+      try { ws.close(); } catch {}
     };
   }, [channel]);
 
-  function clear() {
-    setLines([]);
-  }
+  useEffect(() => {
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    }
+  }, [lines]);
 
   return (
-    <div className="logs-panel">
-      <div className="logs-header">
-        <h3>Live Build Logs</h3>
-        <button onClick={clear} className="btn">
+    <div className="terminal">
+      <div className="terminal-bar">
+        <div className="terminal-dots">
+          <span className="dot" />
+          <span className="dot" />
+          <span className="dot" />
+        </div>
+        <span className="terminal-label">{channel ?? "— no channel —"}</span>
+        <button className="terminal-clear" onClick={() => setLines([])}>
           clear
         </button>
       </div>
-      <div className="logs-container">
-        {lines.map((l, i) => (
-          <div key={i} className="log-line">
-            {l}
-          </div>
-        ))}
+
+      <div className="terminal-body" ref={bodyRef}>
+        {!channel ? (
+          <div className="no-channel-msg">Deploy a project to see live build logs.</div>
+        ) : (
+          lines.map((line, i) => (
+            <div className="log-line" key={i}>
+              <span className="log-prefix">{String(i + 1).padStart(3, "0")}</span>
+              <span className={`log-text log-${classifyLine(line)}`}>{line}</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
