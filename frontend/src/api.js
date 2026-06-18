@@ -1,15 +1,25 @@
-export const API_BASE ="";
+export const API_BASE = "";
 
 export async function createProject(body) {
   const res = await fetch(`${API_BASE}/project`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  const data = await res.json();
-  if (data.status === "error") throw new Error(`API error: ${data.message}`);
-  return data;
+
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status}`);
+  }
+
+  const response = await res.json();
+
+  if (response.status === "error") {
+    throw new Error(response.message);
+  }
+
+  return response;
 }
 
 export function wsUrlForChannel(channel) {

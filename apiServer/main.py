@@ -1,4 +1,5 @@
 import asyncio
+import os
 from fastapi.staticfiles import StaticFiles
 from httpcore import request
 import uvicorn
@@ -12,7 +13,8 @@ from fastapi import Request
 from contextlib import asynccontextmanager
 from config import config
 from config import ProjectRequest
-
+from fastapi import Body
+from logger import *
 
 
 @asynccontextmanager
@@ -35,7 +37,7 @@ app.add_middleware(
 )
 
 PORT = 9000
-
+LOCAL=config.LOCAL.lower()
 # Redis
 subscriber = aioredis.from_url(config.REDIS_URL)
 
@@ -86,7 +88,7 @@ def run_build_container(body: ProjectRequest, project_slug: str, request: Reques
         proto = request.headers.get("x-forwarded-proto", request.url.scheme)
     
     except Exception as e:
-        print(f'Error running ECS task: {e}')
+        publish_error(f'Error running ECS task: {e}')
         return None, None
 
     return host, proto
@@ -121,6 +123,8 @@ manager = ConnectionManager()
 
 
 
+
+
 @app.get('/health')
 async def health_check():
     return {'status': 'ok'}
@@ -137,7 +141,7 @@ async def websocket_endpoint(websocket: WebSocket, channel: str):
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, channel)
-        print(f'Client disconnected from {channel}')
+        publish_log(f'Client disconnected from {channel}')
 
 
 # ── Request Model ─────────────────────────────────────────────────
@@ -157,18 +161,34 @@ async def create_project(body: ProjectRequest, request: Request):
             'message': 'Invalid project type. Must be either "react" or "static".'
         }
     
+    if LOCAL == 'false':
+        host, proto = run_build_container(body, project_slug, request)
 
-    host,proto=run_build_container(body, project_slug, request)
-
+    else:
+        import os
+        try:
+            os.system(f"docker run -d --name {project_slug} --add-host=host.docker.internal:host-gateway --env-file ../buildServer/.env -e GIT_URL={body.gitURL} -e PROJECT_ID={project_slug} -e PROJECT_TYPE={body.type} build:latest")
+        except Exception as e:
+            publish_error(f"Error occurred while running Docker container: {e}")
+            return {
+                'status': 'error',
+                'projectStatus': 'failed',
+                'message': 'Failed to start build container.'
+            }
+        host = "localhost:9000"
+        proto = "http"
+        projectStatus = "queued"
 
     if not host or not proto:
         return {
             'status': 'error',
+            'projectStatus': 'failed',
             'message': 'Invalid host or protocol.'
         }
 
     return {
-        'status': 'queued',
+        'status': 'success',
+        'projectStatus': projectStatus if LOCAL == 'true' else 'building',
         'data': {
             'projectSlug': project_slug,
             'url': f'{proto}://{project_slug}.{host}'
@@ -176,11 +196,17 @@ async def create_project(body: ProjectRequest, request: Request):
     }
 
 
-
+@app.post('/buildstatus')
+async def build_status(body: dict = Body(...)):
+    # This is a placeholder. In a real implementation, you would check the build status from a database or cache.
+    project_slug = body.get('slug')
+    projectStatus = body.get('projectStatus')
+    # Publish build status to Redis channel
+    # await manager.broadcast(f'logs:{project_slug}', {"projectStatus": projectStatus})
 
 # ── Redis Subscriber ──────────────────────────────────────────────
 async def init_redis_subscribe():
-    print('Subscribed to logs....')
+    publish_log('Subscribed to logs....')
     pubsub = subscriber.pubsub()
     await pubsub.psubscribe('logs:*')
     async for message in pubsub.listen():
@@ -192,7 +218,7 @@ async def init_redis_subscribe():
 
 # ── Startup ───────────────────────────────────────────────────────
 if __name__ == '__main__':
-    print(f'API Server Running..{PORT}')
+    publish_log(f'API Server Running..{PORT}')
     uvicorn.run(
         'main:app',
         host='0.0.0.0',

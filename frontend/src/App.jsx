@@ -27,7 +27,11 @@ export default function App() {
       {
         slug,
         url: data.url,
-        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        status: "Building",
       },
     ]);
     setLogsChannel(`logs:${slug}`);
@@ -55,7 +59,10 @@ export default function App() {
         </div>
 
         <div className="panel-right">
-          <LogsPanel channel={logsChannel} />
+          <LogsPanel
+            channel={logsChannel}
+            setDeployments={setDeployments}
+          />
           <section className="history-section">
             <p className="section-eyebrow">Recent deployments</p>
             <DeploymentsList items={deployments} />

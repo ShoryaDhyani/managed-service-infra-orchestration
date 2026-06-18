@@ -14,12 +14,14 @@ class Settings(BaseModel):
     CLUSTER: str = os.getenv("CLUSTER")
     TASK: str = os.getenv("TASK")
     PROXY_BASE_PATH: str = os.getenv("PROXY_BASE_PATH", "localhost:9000")
+    LOCAL: str = os.getenv("LOCAL", "false")
 
 class ProjectRequest(BaseModel):
     gitURL: str
     slug: Optional[str] = None
     name: Optional[str] = None
     type: Optional[str] = None
+    status: Optional[str] = "pending"
 
 
 config = Settings()

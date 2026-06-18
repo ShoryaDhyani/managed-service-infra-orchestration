@@ -298,9 +298,27 @@ body {
   font-size: 10px;
   padding: 3px 8px;
   border-radius: 99px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* Building → yellow */
+.dep-badge--building {
+  background: var(--amber-bg);
+  color: var(--amber-text);
+  border: 1px solid rgba(245,158,11,0.2);
+}
+
+/* Live → green */
+.dep-badge--live {
   background: var(--green-bg);
   color: var(--green-text);
-  font-weight: 500;
   border: 1px solid rgba(16,185,129,0.2);
-  flex-shrink: 0;
+}
+
+/* Failed → red */
+.dep-badge--failed {
+  background: var(--red-bg);
+  color: var(--red-text);
+  border: 1px solid rgba(239,68,68,0.2);
 }

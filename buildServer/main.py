@@ -8,6 +8,7 @@ import boto3
 from redis import Redis
 from dotenv import load_dotenv
 load_dotenv()
+import requests
 # Redis setup
 publisher = Redis.from_url(os.getenv('REDIS_URL'))
 
@@ -81,6 +82,7 @@ def main():
         if return_code != 0:
             publish_log(f'Build failed with exit code {return_code}')
             print(f'Build failed with exit code {return_code}')
+            publish_log('failed')
             return
 
         print('Build Complete')
@@ -94,6 +96,7 @@ def main():
     if not dist_folder_path.exists():
         publish_log('Error: dist folder not found after build')
         print('Error: dist folder not found after build')
+        publish_log('failed')
         return
 
     publish_log('Starting to upload')
@@ -115,6 +118,7 @@ def main():
             print(f'Failed to upload {file_path}: {e}')
 
     publish_log('Done')
+    response = requests.post(f'http://host.docker.internal:9000/buildstatus', json={'slug': PROJECT_ID, 'projectStatus': 'Completed'})
     print('Done...')
 
 
