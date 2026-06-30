@@ -3,15 +3,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from rabbitmq import rabbitmq
 from database.db import get_db
-from user.repo import user_repo
-from user.model import UserCreate, UserLogin, User
-from security.authHelp import jwt_helper, is_authenticated
-from projects.service import project_list,project_exists,project_status
+from user.model import User
+from security.authHelp import is_authenticated
+from projects.service import project_list,project_exists
 from projects.model import ProjectRequest
 from fastapi import Request
-from projects.repo import project_repo
+from projects.repo import ProjectRepo
 from config import config
-from logger import publish_error, publish_log
+from logger import publish_error
 # from fastapi.security import OAuth2PasswordBearer
 
 # oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -39,6 +38,7 @@ async def get_user_projects(user: User = Depends(is_authenticated), session: Ses
     projects = project_list(session, user.id)
     return projects
 
+
 @user_router.post("/project/deploy")
 async def createProject(body: ProjectRequest, request: Request, session: Session = Depends(get_db), user: User = Depends(is_authenticated)):
     if not user.id:
@@ -55,6 +55,7 @@ async def createProject(body: ProjectRequest, request: Request, session: Session
     print(f"Project slug '{project_slug}' is available for creation.")
     
     try:
+        project_repo = ProjectRepo(session=session)
         project=project_repo.create_project({
             'user_id': user.id,
             'slug': project_slug,

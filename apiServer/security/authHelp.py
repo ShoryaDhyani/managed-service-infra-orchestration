@@ -5,7 +5,7 @@ from config import config
 from datetime import datetime, timedelta, timezone
 from fastapi import Depends, Request, HTTPException
 from user.model import User, UserToken
-from user.repo import user_repo
+from user.repo import UserRepository
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer
 
@@ -35,11 +35,12 @@ class JWTAuthHelper(object):
         
 
     @staticmethod
-    def get_user_from_jwt(token: str) -> User:
+    def get_user_from_jwt(token: str, session: Session) -> User:
         payload = JWTAuthHelper.verify_jwt(token)
         if payload is None:
             raise HTTPException(status_code=401, detail="Invalid token")
         user_id = payload.get("id")
+        user_repo = UserRepository(session=session)
         return user_repo.get_user_by_id(user_id)
 
 jwt_helper = JWTAuthHelper()
@@ -50,7 +51,7 @@ def is_authenticated(request: Request, session: Session = Depends(get_db)) -> Us
     token = token.split(" ")[1] if token and " " in token else None
     if not token:
         raise HTTPException(status_code=401, detail="Authorization header missing")
-    user=jwt_helper.get_user_from_jwt(token)
+    user=jwt_helper.get_user_from_jwt(token, session)
 
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")

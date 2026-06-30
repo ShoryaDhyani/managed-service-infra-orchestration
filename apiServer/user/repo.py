@@ -39,6 +39,3 @@ class UserRepository():
     
     def get_user_by_email(self, email: str) -> User:
         return self.session.query(User).filter(User.email == email).first()
-
-session = next(get_db())
-user_repo = UserRepository(session=session)
