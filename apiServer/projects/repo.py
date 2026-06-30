@@ -16,9 +16,13 @@ class ProjectRepo:
         new_project = Project(user_id=project_data['user_id'], slug=project_data['slug'], type=project_data['type'], status=project_data['status'], gitURL=project_data['gitURL'], project_url=project_data['project_url'])
         self.db_session.add(new_project)
         user.no_of_projects += 1
-        self.db_session.commit()
-        self.db_session.refresh(new_project)
-        return new_project
+        try:
+            self.db_session.commit()
+            self.db_session.refresh(new_project)
+            return new_project
+        except Exception as e:
+            self.db_session.rollback()
+            raise e
 
     def get_project_by_slug(self, project_slug: str):
         return self.db_session.query(Project).filter_by(slug=project_slug).first()

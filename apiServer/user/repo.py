@@ -15,9 +15,13 @@ class UserRepository():
         hashed_password=hashing_service.hash_password(user_data.password)
         new_user = User(username=user_data.username, email=user_data.email, hashed_password=hashed_password)
         self.session.add(new_user)
-        self.session.commit()
-        self.session.refresh(new_user)
-        return new_user
+        try:
+            self.session.commit()
+            self.session.refresh(new_user)
+            return new_user
+        except Exception as e:
+            self.session.rollback()
+            raise e
     
     
     def check_user_exists(self, username: str) -> bool:

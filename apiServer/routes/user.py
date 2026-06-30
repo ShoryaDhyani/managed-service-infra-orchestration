@@ -11,6 +11,7 @@ from projects.model import ProjectRequest
 from fastapi import Request
 from projects.repo import project_repo
 from config import config
+from logger import publish_error, publish_log
 # from fastapi.security import OAuth2PasswordBearer
 
 # oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -39,7 +40,7 @@ async def get_user_projects(user: User = Depends(is_authenticated), session: Ses
     return projects
 
 @user_router.post("/project/deploy")
-async def create_project(body: ProjectRequest, request: Request, session: Session = Depends(get_db), user: User = Depends(is_authenticated)):
+async def createProject(body: ProjectRequest, request: Request, session: Session = Depends(get_db), user: User = Depends(is_authenticated)):
     if not user.id:
         raise HTTPException(status_code=404, detail="Unauthorized: User ID not found")
     
@@ -53,15 +54,19 @@ async def create_project(body: ProjectRequest, request: Request, session: Sessio
         raise HTTPException(status_code=400, detail=f'Project with slug "{project_slug}" already exists.')
     print(f"Project slug '{project_slug}' is available for creation.")
     
-
-    project=project_repo.create_project({
-        'user_id': user.id,
-        'slug': project_slug,
-        'type': body.type,
-        'status': 'Queued',
-        'gitURL': body.gitURL,
+    try:
+        project=project_repo.create_project({
+            'user_id': user.id,
+            'slug': project_slug,
+            'type': body.type,
+            'status': 'Queued',
+            'gitURL': body.gitURL,
         'project_url': f'http://{project_slug}.{config.PROXY_BASE_PATH}'
-    })
+        })
+    
+    except Exception as e:
+        publish_error(f"Error creating project: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating project.")
 
 
     await rabbitmq.publish({
@@ -70,12 +75,11 @@ async def create_project(body: ProjectRequest, request: Request, session: Sessio
         'projectType': body.type
     })
     
-    host = config.PROXY_BASE_PATH
     return {
         'status': 'Queued',
-        'projectStatus':'building',
         'data': {
             'projectSlug': project_slug,
-            'url': f'http://{project_slug}.{host}'
+            'url': project.project_url,
+            'projectStatus': project.status
         }
     }

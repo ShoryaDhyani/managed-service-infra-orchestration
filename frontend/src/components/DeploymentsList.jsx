@@ -34,9 +34,9 @@ export default function DeploymentsList({
             >
               {d.url}
             </a>
-
+            {console.log(d)}
             <span className={`dep-badge dep-badge--${(d.status || "Building").toLowerCase()}`}>
-              {d.status || "Building"}
+              {d.status}
             </span>
           </div>
         </div>
