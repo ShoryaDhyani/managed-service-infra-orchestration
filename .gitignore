@@ -7,5 +7,4 @@ dist/
 __pycache__/
 revprox-Lambda
 # Logs
-logs/
 *.log
