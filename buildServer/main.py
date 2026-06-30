@@ -58,6 +58,7 @@ def main():
     if not out_dir_path.exists():
         publish_log(f'Error: output directory not found at {out_dir_path}')
         print(f'Error: output directory not found at {out_dir_path}')
+
         return
 
     if TYPE == 'react':
@@ -83,6 +84,7 @@ def main():
             publish_log(f'Build failed with exit code {return_code}')
             print(f'Build failed with exit code {return_code}')
             publish_log('failed')
+            response = requests.post(f'{os.getenv("API_URL")}/buildstatus', json={'slug': PROJECT_ID, 'projectStatus': 'Failed'}, headers={'Authorization': f'Bearer {os.getenv("SERVICE_TOKEN")}'})
             return
 
         print('Build Complete')
@@ -97,6 +99,7 @@ def main():
         publish_log('Error: dist folder not found after build')
         print('Error: dist folder not found after build')
         publish_log('failed')
+        response = requests.post(f'{os.getenv("API_URL")}/buildstatus', json={'slug': PROJECT_ID, 'projectStatus': 'Failed'}, headers={'Authorization': f'Bearer {os.getenv("SERVICE_TOKEN")}'})
         return
 
     publish_log('Starting to upload')
@@ -116,9 +119,10 @@ def main():
         except Exception as e:
             publish_log(f'Failed to upload {relative_path.as_posix()}: {str(e)}')
             print(f'Failed to upload {file_path}: {e}')
+            response = requests.post(f'{os.getenv("API_URL")}/buildstatus', json={'slug': PROJECT_ID, 'projectStatus': 'Failed'}, headers={'Authorization': f'Bearer {os.getenv("SERVICE_TOKEN")}'})
 
     publish_log('Done')
-    response = requests.post(f'http://host.docker.internal:9000/buildstatus', json={'slug': PROJECT_ID, 'projectStatus': 'Completed'})
+    response = requests.post(f'{os.getenv("API_URL")}/buildstatus', json={'slug': PROJECT_ID, 'projectStatus': 'live'}, headers={'Authorization': f'Bearer {os.getenv("SERVICE_TOKEN")}'})
     print('Done...')
 
 

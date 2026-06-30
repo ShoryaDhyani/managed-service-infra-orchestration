@@ -1,0 +1,42 @@
+name: Build and Push Builder Image
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "buildServer/**"
+
+env:
+  AWS_REGION: ap-south-1
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker Image
+        working-directory: ./buildServer
+        run: |
+          docker build \
+            -t ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO_BUILDER }}:latest .
+
+      - name: Push Docker Image
+        run: |
+          docker push ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO_BUILDER }}:latest

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { createProject } from "../api";
+import { deployProject } from "../api";
 
 export default function DeployForm({ onDeployed }) {
   const [gitURL, setGitURL] = useState("");
@@ -19,15 +19,20 @@ export default function DeployForm({ onDeployed }) {
     }
     setLoading(true);
     try {
-      const json = await createProject({ gitURL, slug: slug || undefined, type });
-      if (json?.data) {
-        onDeployed(json.data);
+      const json = await deployProject({
+        gitURL,
+        slug: slug || undefined,
+        type,
+      });
+      const data = json?.data || json;
+      if (data) {
+        onDeployed(data);
       } else {
         alert("Unexpected response from server.");
       }
     } catch (err) {
       console.error(err);
-      alert("Deployment failed. Check the console for details.");
+      alert(err.message || "Deployment failed. Check the console for details.");
     } finally {
       setLoading(false);
     }

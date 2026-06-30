@@ -1,74 +1,68 @@
-import React, { useState, useEffect } from "react";
-import DeployForm from "./components/DeployForm";
-import ResultCard from "./components/ResultCard";
-import LogsPanel from "./components/LogsPanel";
-import DeploymentsList from "./components/DeploymentsList";
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
 
-export default function App() {
-  const [result, setResult] = useState(null);
-  const [logsChannel, setLogsChannel] = useState(null);
-  const [deployments, setDeployments] = useState(() => {
-    try {
-      return JSON.parse(sessionStorage.getItem("deployments") || "[]");
-    } catch {
-      return [];
-    }
-  });
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
 
-  useEffect(() => {
-    sessionStorage.setItem("deployments", JSON.stringify(deployments));
-  }, [deployments]);
-
-  function handleDeployed(data) {
-    setResult(data);
-    const slug = data.projectSlug;
-    setDeployments((prev) => [
-      ...prev,
-      {
-        slug,
-        url: data.url,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        status: "Building",
-      },
-    ]);
-    setLogsChannel(`logs:${slug}`);
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#0F0F14",
+        color: "#64748B",
+        fontFamily: "'Inter', sans-serif",
+        fontSize: "14px",
+      }}>
+        <div className="spinner" style={{
+          width: 20, height: 20,
+          border: "2px solid rgba(124,58,237,0.3)",
+          borderTopColor: "#7C3AED",
+          borderRadius: "50%",
+          animation: "spin 0.6s linear infinite",
+        }} />
+      </div>
+    );
   }
 
+  return isAuthenticated ? children : <Navigate to="/login" replace />;
+}
+
+function PublicRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) return null;
+  return isAuthenticated ? <Navigate to="/" replace /> : children;
+}
+
+export default function App() {
   return (
-    <div className="app-shell">
-      {/* Top bar */}
-      <header className="topbar">
-        <div className="topbar-brand">
-          <span className="brand-dot" />
-          <span className="brand-name">Deploy</span>
-        </div>
-        <span className="topbar-meta">
-          {deployments.length} deployment{deployments.length !== 1 ? "s" : ""}
-        </span>
-      </header>
-
-      {/* Two-column layout */}
-      <main className="layout">
-        <div className="panel-left">
-          <p className="section-eyebrow">New deployment</p>
-          <DeployForm onDeployed={handleDeployed} />
-          {result && <ResultCard result={result} />}
-        </div>
-
-        <div className="panel-right">
-          <LogsPanel
-            channel={logsChannel}
-            setDeployments={setDeployments}
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <LoginPage />
+              </PublicRoute>
+            }
           />
-          <section className="history-section">
-            <p className="section-eyebrow">Recent deployments</p>
-            <DeploymentsList items={deployments} />
-          </section>
-        </div>
-      </main>
-    </div>
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

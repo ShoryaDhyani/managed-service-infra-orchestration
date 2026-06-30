@@ -1,33 +1,53 @@
 import asyncio
-import os
-from fastapi.staticfiles import StaticFiles
-from httpcore import request
 import uvicorn
 import redis.asyncio as aioredis
-import boto3
-from coolname import generate_slug
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from database.db import get_db
+from projects.service import update_project_status
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi import Request
 from contextlib import asynccontextmanager
 from config import config
-from config import ProjectRequest
 from fastapi import Body
 from logger import *
-
+from rabbitmq import rabbitmq
+from worker import main as wm
+from database.init_db import create_tables
+from routes.user import user_router
+from routes.auth import auth_router
+from sqlalchemy.orm import Session
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    
     task = asyncio.create_task(init_redis_subscribe())
-    
+    await rabbitmq.connect()
+    worker= asyncio.create_task(wm())
+    create_tables()
+    redis = aioredis.from_url(
+        config.REDIS_URL,
+        decode_responses=True,
+        socket_keepalive=True,
+        health_check_interval=30,
+    )
+    await FastAPILimiter.init(redis)
+
     yield
-    
+
+
     task.cancel()
+    await rabbitmq.close()
+    worker.cancel()
+    await redis.close()
+
     try:
         await task
     except asyncio.CancelledError:
         pass
+
+
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
@@ -39,61 +59,16 @@ app.add_middleware(
 PORT = 9000
 LOCAL=config.LOCAL.lower()
 # Redis
-subscriber = aioredis.from_url(config.REDIS_URL)
-
-# ECS
-ecs_client = boto3.client(
-    'ecs',
-    region_name='ap-south-1',
-    aws_access_key_id=config.S3_ACCESS_KEY,
-    aws_secret_access_key=config.S3_SECRET_KEY
+subscriber = aioredis.from_url(
+    config.REDIS_URL,
+    decode_responses=True,
+    socket_keepalive=True,
+    health_check_interval=30,
 )
 
-container_config = {
-    'CLUSTER': config.CLUSTER,
-    'TASK': config.TASK
-}
 
-
-def run_build_container(body: ProjectRequest, project_slug: str, request: Request):
-    try:
-        ecs_client.run_task(
-            cluster=container_config['CLUSTER'],
-            taskDefinition=container_config['TASK'],
-            launchType='FARGATE',
-            count=1,
-            networkConfiguration={
-                'awsvpcConfiguration': {
-                    'assignPublicIp': 'ENABLED',
-                    'subnets': ['subnet-0d9261d1bac8665af', 'subnet-03eb8bca8687f02d8', 'subnet-0afe74c57cdd4e235'],
-                    'securityGroups': ['sg-0d8483897cb94cd43']
-                }
-            },
-            overrides={
-                'containerOverrides': [
-                    {
-                        'name': 'builder-image',
-                        'environment': [
-                            {'name': 'GIT_URL', 'value': body.gitURL},
-                            {'name': 'PROJECT_ID', 'value': project_slug},
-                            {'name': 'PROJECT_TYPE', 'value': body.type}
-                        ]
-                    }
-                ]
-            }
-        )
-
-        # Get protocol + host from request
-        host = request.headers.get("host")
-        proto = request.headers.get("x-forwarded-proto", request.url.scheme)
-    
-    except Exception as e:
-        publish_error(f'Error running ECS task: {e}')
-        return None, None
-
-    return host, proto
-
-
+app.include_router(user_router, prefix="/api/v1", tags=["User"], dependencies=[Depends(RateLimiter(times=10, seconds=60))])
+app.include_router(auth_router, prefix="/api/v1", tags=["Auth"], dependencies=[Depends(RateLimiter(times=5, seconds=60))])
 
 # ── Connection Manager ────────────────────────────────────────────
 class ConnectionManager:
@@ -125,7 +100,7 @@ manager = ConnectionManager()
 
 
 
-@app.get('/health')
+@app.get('/health', dependencies=[Depends(RateLimiter(times=10, seconds=60))])
 async def health_check():
     return {'status': 'ok'}
 
@@ -144,63 +119,18 @@ async def websocket_endpoint(websocket: WebSocket, channel: str):
         publish_log(f'Client disconnected from {channel}')
 
 
-# ── Request Model ─────────────────────────────────────────────────
-app.mount('/assets', StaticFiles(directory='static/assets'), name='assets')
-@app.get('/')
-async def root(request: Request):
-    return FileResponse('static/index.html')
-
-# ── Routes ────────────────────────────────────────────────────────
-@app.post('/project')
-async def create_project(body: ProjectRequest, request: Request):
-    project_slug = body.slug if body.slug else generate_slug(2)
-
-    if body.type not in ['react', 'static']:
-        return {
-            'status': 'error',
-            'message': 'Invalid project type. Must be either "react" or "static".'
-        }
-    
-    if LOCAL == 'false':
-        host, proto = run_build_container(body, project_slug, request)
-
-    else:
-        import os
-        try:
-            os.system(f"docker run -d --name {project_slug} --add-host=host.docker.internal:host-gateway --env-file ../buildServer/.env -e GIT_URL={body.gitURL} -e PROJECT_ID={project_slug} -e PROJECT_TYPE={body.type} build:latest")
-        except Exception as e:
-            publish_error(f"Error occurred while running Docker container: {e}")
-            return {
-                'status': 'error',
-                'projectStatus': 'failed',
-                'message': 'Failed to start build container.'
-            }
-        host = "localhost:9000"
-        proto = "http"
-        projectStatus = "queued"
-
-    if not host or not proto:
-        return {
-            'status': 'error',
-            'projectStatus': 'failed',
-            'message': 'Invalid host or protocol.'
-        }
-
-    return {
-        'status': 'success',
-        'projectStatus': projectStatus if LOCAL == 'true' else 'building',
-        'data': {
-            'projectSlug': project_slug,
-            'url': f'{proto}://{project_slug}.{host}'
-        }
-    }
 
 
 @app.post('/buildstatus')
-async def build_status(body: dict = Body(...)):
+async def build_status(request: Request, body: dict = Body(...),db: Session = Depends(get_db)):
     # This is a placeholder. In a real implementation, you would check the build status from a database or cache.
+    if request.headers.get("Authorization") != f"Bearer {config.SERVICE_TOKEN}":
+        raise HTTPException(status_code=403, detail="Invalid service token")
     project_slug = body.get('slug')
     projectStatus = body.get('projectStatus')
+    if projectStatus == 'failed':
+        publish_error(f"Build failed for project: {project_slug}")
+    update_project_status(db,project_slug,projectStatus)
     # Publish build status to Redis channel
     # await manager.broadcast(f'logs:{project_slug}', {"projectStatus": projectStatus})
 
@@ -225,3 +155,4 @@ if __name__ == '__main__':
         port=PORT,
         ws='websockets'
     )
+

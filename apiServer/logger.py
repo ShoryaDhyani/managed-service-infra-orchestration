@@ -1,7 +1,8 @@
 import logging
+from datetime import datetime
 
 logging.basicConfig(
-    level=logging.INFO,filename='backend.log',filemode='w',format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO,filename=f'logs/log-{datetime.now().strftime("%Y-%m-%d")}.log',filemode='w',format='%(asctime)s |%(filename)s| - %(levelname)s - %(message)s'
 )
 
 def publish_log(message):
