@@ -4,7 +4,8 @@ from fastapi import Request
 import aio_pika
 import boto3
 from logger import *
-
+# from database.db import get_db
+# from sqlalchemy.orm import Session
 from projects.model import ProjectRequest
 from config import config
 
@@ -98,7 +99,7 @@ async def process(message: aio_pika.IncomingMessage):
         publish_log(f"Building {deployment_id}")
 
 
-        update_project_status(deployment_id, "live")
+        update_project_status(project_slug=deployment_id, new_status="live")
 
         publish_log("Done")
 

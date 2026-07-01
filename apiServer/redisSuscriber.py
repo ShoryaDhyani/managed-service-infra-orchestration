@@ -8,6 +8,7 @@ redis = aioredis.from_url(
     decode_responses=True,
     socket_keepalive=True,
     health_check_interval=30,
+    retry_on_timeout=True,
 )
 
 async def init_redis_subscribe(manager):

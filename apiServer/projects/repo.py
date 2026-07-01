@@ -43,5 +43,5 @@ class ProjectRepo:
         return project
     
     
-session = next(get_db())
-project_repo = ProjectRepo(db_session=session)
+# session = next(get_db())
+# project_repo = ProjectRepo(db_session=session)

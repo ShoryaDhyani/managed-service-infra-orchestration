@@ -13,7 +13,7 @@ def project_status(db, project_id):
     project = db.query(Project).filter(Project.id == project_id).first()
     return project.status if project else None
 
-def update_project_status(db, project_slug, new_status):
+def update_project_status( project_slug, new_status,db=get_db()):
     project = db.query(Project).filter(Project.slug == project_slug).first()
     if project:
         project.status = new_status

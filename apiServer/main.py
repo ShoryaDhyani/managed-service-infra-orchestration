@@ -95,7 +95,8 @@ async def build_status(request: Request, body: dict = Body(...),db: Session = De
     projectStatus = body.get('projectStatus')
     if projectStatus == 'failed':
         publish_error(f"Build failed for project: {project_slug}")
-    update_project_status(db,project_slug,projectStatus)
+    update_project_status(project_slug=project_slug,new_status=projectStatus,db=db)
+
 
 
 

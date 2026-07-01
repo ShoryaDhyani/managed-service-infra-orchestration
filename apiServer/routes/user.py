@@ -47,15 +47,15 @@ async def createProject(body: ProjectRequest, request: Request, session: Session
     project_slug = body.slug if body.slug else generate_slug(2)
 
     print(f"Creating project with slug: {project_slug} for user ID: {user.id}")
-    if body.type not in ['react', 'static']:
-        raise HTTPException(status_code=400, detail="Invalid project type. Must be 'react' or 'static'.")
+    if body.type not in ['node', 'static']:
+        raise HTTPException(status_code=400, detail="Invalid project type. Must be 'node' or 'static'.")
     print(f"Project type: {body.type}, Git URL: {body.gitURL}")
     if project_exists(session, project_slug):
         raise HTTPException(status_code=400, detail=f'Project with slug "{project_slug}" already exists.')
     print(f"Project slug '{project_slug}' is available for creation.")
     
     try:
-        project_repo = ProjectRepo(session=session)
+        project_repo = ProjectRepo(db_session=session)
         project=project_repo.create_project({
             'user_id': user.id,
             'slug': project_slug,
@@ -67,7 +67,7 @@ async def createProject(body: ProjectRequest, request: Request, session: Session
     
     except Exception as e:
         publish_error(f"Error creating project: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error creating project.")
+        raise HTTPException(status_code=400, detail=f"Error creating project.")
 
 
     await rabbitmq.publish({
