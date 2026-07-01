@@ -31,12 +31,33 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build Docker Image
+      - name: Set image tag
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build and push image
         working-directory: ./buildServer
         run: |
-          docker build \
-            -t ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO_BUILDER }}:latest .
+          IMAGE=${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO_BUILDER }}
+          docker build -t $IMAGE:${{ steps.vars.outputs.sha_short }} -t $IMAGE:latest .
+          docker push $IMAGE:${{ steps.vars.outputs.sha_short }}
+          docker push $IMAGE:latest
 
-      - name: Push Docker Image
+      - name: Download current task definition
         run: |
-          docker push ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO_BUILDER }}:latest
+          aws ecs describe-task-definition \
+            --task-definition builder-task \
+            --query taskDefinition > task-definition.json
+
+      - name: Update image in task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: builder-image
+          image: ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPO_BUILDER }}:${{ steps.vars.outputs.sha_short }}
+
+      - name: Register new task definition revision
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
