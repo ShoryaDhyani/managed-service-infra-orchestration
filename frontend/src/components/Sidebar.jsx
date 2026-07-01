@@ -54,7 +54,7 @@ export default function Sidebar({ activeTab, onTabChange }) {
             <polyline points="2 12 12 17 22 12" />
           </svg>
         </div>
-        <span className="sidebar-brand-name">Deploy</span>
+        <span className="sidebar-brand-name">Managed Service</span>
       </div>
 
       {/* Navigation */}

@@ -22,7 +22,7 @@ function classifyLine(line) {
   return "info";
 }
 
-export default function LogsPanel({ channel, setDeployments }) {
+export default function LogsPanel({ channel }) {
   const [lines, setLines] = useState([]);
   const bodyRef = useRef(null);
 
@@ -30,7 +30,7 @@ export default function LogsPanel({ channel, setDeployments }) {
     if (!channel) return;
 
     const ws = new WebSocket(wsUrlForChannel(channel));
-    const slug = channel.replace("logs:", "");
+
 
     ws.onopen = () => {
       setLines((prev) => [...prev, `Connected to ${channel}`]);
@@ -43,20 +43,9 @@ export default function LogsPanel({ channel, setDeployments }) {
 
         setLines((prev) => [...prev, log]);
 
-        if (log.toLowerCase() === "failed") {
-          setDeployments((prev) =>
-            prev.map((d) =>
-              d.slug === slug ? { ...d, status: "Failed" } : d
-            )
-          );
-        }
+
 
         if (log === "Done") {
-          setDeployments((prev) =>
-            prev.map((d) =>
-              d.slug === slug ? { ...d, status: "Live" } : d
-            )
-          );
           ws.close();
         }
       } catch {
@@ -75,7 +64,7 @@ export default function LogsPanel({ channel, setDeployments }) {
     return () => {
       ws.close();
     };
-  }, [channel, setDeployments]);
+  }, [channel]);
 
   useEffect(() => {
     if (bodyRef.current) {

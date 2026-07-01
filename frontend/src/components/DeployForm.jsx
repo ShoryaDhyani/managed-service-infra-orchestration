@@ -50,7 +50,7 @@ export default function DeployForm({ onDeployed }) {
           <option value="none" disabled>
             Select a type
           </option>
-          <option value="react">React</option>
+          <option value="node">Node.js</option>
           <option value="static">Static (HTML / CSS)</option>
         </select>
       </div>

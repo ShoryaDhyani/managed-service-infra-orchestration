@@ -3,7 +3,7 @@ import Sidebar from "../components/Sidebar";
 import DeployForm from "../components/DeployForm";
 import ResultCard from "../components/ResultCard";
 import LogsPanel from "../components/LogsPanel";
-import DeploymentsList from "../components/DeploymentsList";
+
 import { useAuth } from "../context/AuthContext";
 import { getProjects } from "../api";
 
@@ -18,17 +18,6 @@ export default function DashboardPage() {
   // Deploy state
   const [result, setResult] = useState(null);
   const [logsChannel, setLogsChannel] = useState(null);
-  const [deployments, setDeployments] = useState(() => {
-    try {
-      return JSON.parse(sessionStorage.getItem("deployments") || "[]");
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    sessionStorage.setItem("deployments", JSON.stringify(deployments));
-  }, [deployments]);
 
   // Fetch projects
   const fetchProjects = useCallback(async () => {
@@ -50,21 +39,8 @@ export default function DashboardPage() {
   function handleDeployed(data) {
     setResult(data);
     const slug = data.projectSlug || data.slug;
-    setDeployments((prev) => [
-      ...prev,
-      {
-        slug,
-        url: data.url,
-        time: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        status: "Building",
-      },
-    ]);
     setLogsChannel(`logs:${slug}`);
-    setActiveTab("deploy"); // Switch to deploy tab to show logs
-    // Refresh projects list after a delay
+    setActiveTab("deploy");
     setTimeout(fetchProjects, 2000);
   }
 
@@ -115,7 +91,6 @@ export default function DashboardPage() {
               failedCount={failedCount}
               projects={projects}
               projectsLoading={projectsLoading}
-              deployments={deployments}
               onDeployed={handleDeployed}
             />
           )}
@@ -130,8 +105,6 @@ export default function DashboardPage() {
             <DeployTab
               result={result}
               logsChannel={logsChannel}
-              deployments={deployments}
-              setDeployments={setDeployments}
               onDeployed={handleDeployed}
             />
           )}
@@ -142,7 +115,7 @@ export default function DashboardPage() {
 }
 
 /* ─── Overview Tab ──────────────────────────────────────── */
-function OverviewTab({ totalProjects, liveCount, buildingCount, failedCount, projects, projectsLoading, deployments, onDeployed }) {
+function OverviewTab({ totalProjects, liveCount, buildingCount, failedCount, projects, projectsLoading, onDeployed }) {
   return (
     <>
       {/* Stats */}
@@ -194,23 +167,6 @@ function OverviewTab({ totalProjects, liveCount, buildingCount, failedCount, pro
             </div>
             <div className="section-card-body">
               <DeployForm onDeployed={onDeployed} />
-            </div>
-          </div>
-
-          {/* Recent deployments */}
-          <div className="section-card">
-            <div className="section-card-header">
-              <div className="section-card-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                Recent Activity
-              </div>
-              <span className="section-card-badge">{deployments.length}</span>
-            </div>
-            <div className="section-card-body">
-              <DeploymentsList items={deployments} />
             </div>
           </div>
         </div>
@@ -281,7 +237,8 @@ function ProjectsTab({ projects, loading, onRefresh }) {
 }
 
 /* ─── Deploy Tab ───────────────────────────────────────── */
-function DeployTab({ result, logsChannel, deployments, setDeployments, onDeployed }) {
+function DeployTab({ result, logsChannel, onDeployed }) {
+
   return (
     <div className="dashboard-grid">
       <div>
@@ -302,27 +259,12 @@ function DeployTab({ result, logsChannel, deployments, setDeployments, onDeploye
           </div>
         </div>
 
-        {/* Recent deploys */}
-        <div className="section-card" style={{ marginTop: 24 }}>
-          <div className="section-card-header">
-            <div className="section-card-title">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              Deploy History
-            </div>
-            <span className="section-card-badge">{deployments.length}</span>
-          </div>
-          <div className="section-card-body">
-            <DeploymentsList items={deployments} />
-          </div>
-        </div>
+
       </div>
 
       {/* Logs terminal */}
       <div>
-        <LogsPanel channel={logsChannel} setDeployments={setDeployments} />
+        <LogsPanel channel={logsChannel} />
       </div>
     </div>
   );
